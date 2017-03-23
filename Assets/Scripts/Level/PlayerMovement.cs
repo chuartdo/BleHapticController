@@ -25,9 +25,8 @@ public class PlayerMovement : MonoBehaviour {
 		x2 = BleController.x2;
 		y2 = BleController.y2;
 
-		up = BleController.b2?0.1f:0;
-
-	
+		// Move up or down pressing button 3 & 4
+		up = BleController.b2?0.1f: (BleController.b3?-0.1f:0);
 
 		if (useRotation) {
 			float angle = Mathf.Atan2( x2, y2)* 180;

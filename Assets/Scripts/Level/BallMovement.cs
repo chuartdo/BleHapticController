@@ -16,11 +16,13 @@ public class BallMovement : MonoBehaviour {
 		rb.AddTorque(transform.up * thrust);
 	}
 
-	void OnCollisionEnter(Collision collision) {
- 
-		if (collision.relativeVelocity.magnitude > 2)
-			Destroy(this.gameObject,2f);
 
+	void OnCollisionEnter(Collision collision) {
+		if (tag == "Recycle") {
+			if (collision.relativeVelocity.magnitude > 2)
+				Destroy(this.gameObject,2f);
+		}
 	}
+
 
 }
