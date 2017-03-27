@@ -26,7 +26,7 @@ public class PlayerMovement : MonoBehaviour {
 		y2 = BleController.y2;
 
 		// Move up or down pressing button 3 & 4
-		up = BleController.b2?0.1f: (BleController.b3?-0.1f:0);
+		up = BleController.b1?0.1f: (BleController.b3?-0.1f:0);
 
 		if (useRotation) {
 			float angle = Mathf.Atan2( x2, y2)* 180;
@@ -37,7 +37,7 @@ public class PlayerMovement : MonoBehaviour {
 			transform.Translate(x1 * translation , up, y1 * translation);
 		}
 
-		if (BleController.b1) {
+		if (BleController.b2) {
 			if (bullet != null) {
 				GameObject ball = Instantiate(bullet,this.transform.position+Vector3.up * 1.3f,this.transform.rotation);
 				ball.transform.parent = null;

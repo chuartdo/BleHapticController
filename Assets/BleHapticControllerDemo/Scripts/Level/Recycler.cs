@@ -8,7 +8,8 @@ public class Recycler : MonoBehaviour {
 	void OnTriggerEnter(Collider other) {
 		if (spawnPoint != null && other.tag == "Respawn") 
 			other.gameObject.transform.position = spawnPoint.transform.position;
- 		else 
+		else  if (other.tag != "Player") {
 			Destroy(other.gameObject,1f);
+		}
 	}
 }

@@ -29,7 +29,7 @@ const int joyStick2YPin = A3;
 const int button1Pin = 0;
 const int button2Pin = 1;
 const int button3Pin = 2;
-const int button4Pin = 3;
+const int button4Pin = 4;
 
 /* ===== Relay pin assignment for activating feedback devices */
 int relayPins[] = { 8,9,10,11 };
@@ -114,6 +114,39 @@ void loop() {
   }
 }
 
+
+#ifdef lcd_display
+  void writeLCD(String  prefix, float x, float y, int row) {
+      String outputMsg;
+      outputMsg = String(prefix);
+      outputMsg += String(x);
+      outputMsg += " ";
+      outputMsg += String(y);
+      outputMsg += "\0";
+  
+      for (int i = outputMsg.length(); i<16 ; i++);
+        outputMsg += " ";
+      lcd.setCursor(0,row);
+      Serial.print(outputMsg);
+      lcd.print(outputMsg);
+  }
+  
+  int colorCycle = 1;
+  
+  void changeColor() {
+ 
+    int r = (0x04 & colorCycle) > 0?50:10;
+    int g = (0x02 & colorCycle) > 0?50:10;
+    int b = (0x01 & colorCycle) > 0?50:10;
+    lcd.setRGB(r, g, b);
+    colorCycle += 1;
+    if (colorCycle >= 8)
+       colorCycle = 0;
+  }
+
+#endif
+
+
 bool sendData = false;
 
 void blePeripheralConnectHandler(BLECentral& central) {
@@ -130,9 +163,28 @@ void blePeripheralDisconnectHandler(BLECentral& central) {
   Serial.print("Disconnected ");
   Serial.println(central.address());
   sendData = false;
+  turnOffAllRelay();
   digitalWrite(ledPin, LOW);
 }
 
+void activateRelay(int relayNum, bool state) {
+  if (relayNum >= 0 && relayNum < relayPinCount ) {
+    
+    #ifdef lcd_display
+      colorCycle = relayNum + 1;
+      if (state > 0)
+        changeColor();
+      
+    else
+      Serial.print("Activate relay ");
+      Serial.println(relayNum);   
+      Serial.print("  ");
+      Serial.println(state?"ON":"OFF");
+    #endif
+    digitalWrite(relayPins[relayNum] ,state);
+
+ }
+}
 /* Obtain 3 byte command from ble/ Andorid and turn on relay based on number */
 /* 3 byte command, relayNum, value */
 
@@ -152,13 +204,7 @@ void ReceiveCharacteristicWritten(BLECentral& central, BLECharacteristic& charac
           relayNum -=48;
           
         bool state = command[2] > 0?HIGH:LOW;
-        if (relayNum >= 0 && relayNum < relayPinCount ) {
-            Serial.print("Activate relay ");
-            Serial.println(relayNum);   
-            Serial.print("  ");
-            Serial.println(command[2]);
-            digitalWrite(relayPins[relayNum] ,state);
-         }
+        activateRelay(relayNum, state);
     }
   }
 }
@@ -233,43 +279,15 @@ float normalize(float val, float minimum, float center, float maximum) {
     if (val > 1.0)
       val = 1.0;
   }
-  else 
+  else {
      val =  mapfloat(val,minimum, center, -1.0, 0);
+  }
   return val;
 }
  
 // Read data store in following encoded bytes  
 // Convert to nomalized value -1 to 1  O is near center
 
-#ifdef lcd_display
-  void writeLCD(String  prefix, float x, float y, int row) {
-      String outputMsg;
-      outputMsg = String(prefix);
-      outputMsg += String(x);
-      outputMsg += " ";
-      outputMsg += String(y);
-      outputMsg += "\0";
-  
-      for (int i = outputMsg.length(); i<16 ; i++);
-        outputMsg += " ";
-      lcd.setCursor(0,row);
-      Serial.print(outputMsg);
-      lcd.print(outputMsg);
-  }
-  
-  int colorCycle = 1;
-  
-  void changeColor() {
-    colorCycle += 1;
-    int r = (0x04 & colorCycle) > 0?100:0;
-    int g = (0x02 & colorCycle) > 0?100:0;
-    int b = (0x01 & colorCycle) > 0?100:0;
-    lcd.setRGB(r, g, b);
-  
-    // test relay
-    digitalWrite(relayPins[colorCycle % 6] ,HIGH);
-  }
-#endif
 
 float getMinMax(int source, int* min, int* max) {
   if (source < *min) 
@@ -279,16 +297,40 @@ float getMinMax(int source, int* min, int* max) {
   return source;
 }
 
+void turnOffAllRelay() {
+  for (int i=0; i< relayPinCount; i++) {
+    digitalWrite(relayPins[i] ,LOW);
+  }  
+}
+
+bool buttonState[4];
+int buttonStates() {
+  int state = 0;
+  
+  if (!buttonState[0] ) {
+    state += 1;
+  }
+  if (!buttonState[1]) {
+    state += 2;
+  }
+  if (!buttonState[2]) {
+    state += 4;
+  }
+  if (!buttonState[3]) {
+    state += 8;
+  }
+  return state;
+}
+
 int max_j1x= -1, min_j1x= 9999, max_j1y=-1, min_j1y=9999;
 int max_j2x= -1, min_j2x= 9999, max_j2y=-1, min_j2y=9999;
 int ctr_x1=600, ctr_y1=600, ctr_x2=600, ctr_y2=600;
 
 bool calibration = true;
 bool recordCenter = true;
-bool buttonState[4];
+
 
 void readJoystickLoop () {
-  float  x1, y1, x2, y2;
   int x1a, y1a, x2a, y2a;
   
   x1a = analogRead(joyStick1XPin);
@@ -296,95 +338,40 @@ void readJoystickLoop () {
   x2a = analogRead(joyStick2XPin);
   y2a = analogRead(joyStick2YPin);
 
-  if (recordCenter) {  // Get initial center state of joysticks   
-    delay(1500);   
+  if (recordCenter) {  // Get initial center state of joysticks on power on
+    #ifdef lcd_display
+      lcd.setRGB(50, 50, 50);
+      lcd.print("Calibrate JOYSTX");
+      lcd.setCursor(0,1);
+      lcd.print("Record Center POS");
+      delay(1500);   
+    #endif
+    
     ctr_x1 = x1a;
     ctr_y1 = y1a;
     ctr_x2 = x2a;
     ctr_y2 = y2a;
     recordCenter = false;
-    lcd.setRGB(0, 100, 0);
+
+    #ifdef lcd_display
+     lcd.setRGB(0, 100, 0);
+    #endif
   }
 
-  float buttons = 0;
   buttonState[0]=digitalRead(button1Pin)==0;
   buttonState[1]=digitalRead(button2Pin)==0;
   buttonState[2]=digitalRead(button3Pin)==0;
   buttonState[3]=digitalRead(button4Pin)==0;
+  float buttons =  buttonStates();
 
-  if (digitalRead(button1Pin)> 0) {
-    buttons += 1;
-  }
-  if (digitalRead(button2Pin)> 0) {
-    buttons += 2;
-  }
-  if (digitalRead(button3Pin)> 0) {
-    buttons += 4;
-  }
-  if (digitalRead(button4Pin)> 0) {
-    buttons += 8;
-  }
-
+ 
   String outputMsg = "";
    
   // Get max and min range of joysticks
-   x1= getMinMax(x1a,&min_j1x,&max_j1x);
-   y1= getMinMax(y1a,&min_j1y,&max_j1y);
-   x2= getMinMax(x2a,&min_j2x,&max_j2x);
-   y2= getMinMax(y2a,&min_j2y,&max_j2y);
-
-   /*  
- if (calibration) {
-    #ifdef lcd_display
-     // writeLCD("J1: ",x1a,y1a,0);
-     // writeLCD("J2: ",x2a,y2a,1);
-     writeLCD("R1: ",min_j1x,max_j1x,0);
-     writeLCD("R2: ",min_j2x,max_j2x,1);
-    #endif
-  
-    if ( buttons > 0 && buttons < 15 ) {
-      ctr_x1 = x1;
-      ctr_y1 = y1;
-      ctr_x2 = x2;
-      ctr_y2 = y2;
-      calibration = false;
-      #ifdef lcd_display
-      lcd.setRGB(0, 100, 0);
-      #endif 
-    }     
- } else
- */
- {
-    #ifdef lcd_display
-    if (buttons >0 && buttons < 15 ) {
-      //sendData=true;
-      #ifdef lcd_display
-      //lcd.setRGB(0, 0, 10); // Dim LCD
-      #endif
-    }
-  
-    if (!sendData) {
-      writeLCD("J1: ",x1a,y1a,0);
-      writeLCD("J2: ",x2a,y2a,1);
-     // writeLCD("C1: ",ctr_x1,ctr_y1,0);
-     // writeLCD("C2: ",ctr_x2,ctr_y2,1);
-
-     // TEST relay and buttons
-     if (buttons == 14)
-        changeColor();
-    /*
-     if (buttons == 15) {  // turn off all relay
-        for (int i=0; i< relayPinCount; i++) {
-          digitalWrite(relayPins[i] ,LOW);
-        }
-      }
-    */
-    for (int i=0; i< 3; i++) {
-      digitalWrite(relayPins[i] ,buttonState[i]?HIGH:LOW);
-    }
-      
-    #endif
- }
+   getMinMax(x1a,&min_j1x,&max_j1x);
+   getMinMax(y1a,&min_j1y,&max_j1y);
+   getMinMax(x2a,&min_j2x,&max_j2x);
+   getMinMax(y2a,&min_j2y,&max_j2y);
 
   // normalize stick movement range to -1 and 1 
   float fx1 = normalize(x1a,min_j1x, ctr_x1, max_j1x);
@@ -394,13 +381,29 @@ void readJoystickLoop () {
   
   if (sendData) {    
     #ifdef lcd_display
-    writeLCD("X: ",fx1,fy1,0);
-    writeLCD("Y: ",fx2,fy2,1);
+      writeLCD(" 1: ",fx1,fy1,0);
+      writeLCD(" 2: ",fx2,fy2,1);
     #endif
     sendControlData(  fx1,  fy1, fx2, fy2, buttons);
-  }
+    
+  } else {
 
+     #ifdef lcd_display
+        writeLCD("J1: ",x1a,y1a,0);
+        writeLCD("J2: ",x2a,y2a,1);
+     #endif
+
+    // Turn on Relay switch with button press
+    for (int i=0; i< 3; i++) {
+      activateRelay(i ,buttonState[i]?HIGH:LOW);
+    }
+     
+    // Recenter joystick when all button pressed down
+    if (buttons == 0) {
+      recordCenter = true;
+    }
   }
+ 
 }
 
 /*

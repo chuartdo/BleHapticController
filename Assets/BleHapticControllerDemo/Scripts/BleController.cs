@@ -4,24 +4,21 @@ using System.Collections;
 using System;
 using System.Collections.Generic;
 
+// Include this script inside gameObject named "BleController" for proper
+// Callback when Ble connection is established
+
 public class BleController : MonoBehaviour
 {
     private AndroidJavaObject plugin;
     private bool refresh = false;
- 
+    
  
 	static BleController _instance = null;
 
 	static public float x1,y1;
 	static public float x2,y2;
 	static public bool b1,b2,b3,b4;
-
-	/*
-    byte[ ] byteArray = {
-		0xBD,   0x4c,   0xcc,   0xcD, 0xBD,   0x4c,   0xcc,   0xcD,0xBD,   0x4c,   0xcc,   0xcD,
-		  0x3f, 0x49, 0xfb, 0xe7, 128,  59,   0,   0, 
-	 };
-*/
+	public bool debug = true;
 
     void Start()
     {
@@ -30,22 +27,34 @@ public class BleController : MonoBehaviour
 
 #if UNITY_ANDROID
 		try {
-			Debug.Log("running");
 			plugin  = new AndroidJavaClass("com.chuart.util.libs.UnityUARTPlugin").CallStatic<AndroidJavaObject>("getInstance");
-			DebugText.show ("Waiting Controller connection ..");
+			DebugText.show ("Waiting connection ..");
 			plugin.Call("connectBLEController", "connect");
  		} catch (Exception e) {
 			DebugText.show("Error init Class");
  		}
-#endif
-		Invoke("ReadControlData", 2f);
+		if (debug)
+			refresh = true;
+ #else
+		refresh = true;
+
+ #endif
+		//Invoke("BleStatus", 2f);
     }
 
-    void ReadControlData()
+	// Call back invoked by the Java Plugin.  
+	public void BleStatus(String status = null)
     {
-        refresh = true;
-    }
+		if (status != null) {
+			DebugText.show ("Ble status: " + status);
 
+			if (status.StartsWith("connect"))
+        		refresh = true;
+			else 
+				refresh = false;
+		}
+    }
+	 
     void OnApplicationQuit()
     {
 #if UNITY_ANDROID
