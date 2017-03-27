@@ -213,7 +213,7 @@ byte* floatToByteArray(float f, byte* ret) {
     unsigned int asInt = *((int*)&f);
     int i;
     for (i = 0; i < 4; i++) {
-        ret[3] = (asInt >> 8 * i) & 0xFF;
+        ret[i] = (asInt >> 8 * i) & 0xFF;
     }
     return ret;
 }
